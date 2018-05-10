@@ -37,7 +37,7 @@ public class DongluAuthentication extends Authentication {
         }
 
         Authentication authentication = new Authentication(northApiClient);
-        refreshTokenService.scheduleWithFixedDelay(()-> refreshTokenTask(authentication),5,5,TimeUnit.SECONDS);
+        refreshTokenService.scheduleWithFixedDelay(()-> refreshTokenTask(authentication),5,300,TimeUnit.SECONDS);
         return authentication;
     }
 
