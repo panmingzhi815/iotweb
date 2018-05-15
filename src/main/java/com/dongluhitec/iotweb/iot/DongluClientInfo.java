@@ -1,11 +1,8 @@
-package com.dongluhitec.iotweb.bean;
+package com.dongluhitec.iotweb.iot;
 
 import com.huawei.iotplatform.client.dto.ClientInfo;
-import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDateTime;
 
 @Component
 @ConfigurationProperties(prefix = "client")

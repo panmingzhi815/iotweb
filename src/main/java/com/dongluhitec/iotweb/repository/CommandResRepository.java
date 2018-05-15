@@ -10,8 +10,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface DeviceRepository extends CrudRepository<CommandRes, Long> {
+public interface CommandResRepository extends CrudRepository<CommandRes, Long> {
 
     Page<CommandRes> findAll(Specification<CommandRes> specification, Pageable page);
 
+    List<CommandRes> findByDeviceId(String deviceId);
 }

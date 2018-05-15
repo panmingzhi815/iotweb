@@ -17,17 +17,8 @@ public class SessionFilter implements Filter {
 
     @Override
     public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
-        HttpServletResponse resp = (HttpServletResponse) servletResponse;
         HttpServletRequest rep = (HttpServletRequest) servletRequest;
-        //允许进行跨域的主机ip
-        resp.addHeader("Access-Control-Allow-Origin", rep.getHeader("Origin"));
-        //允许跨域请求中携带cookie
-        resp.addHeader("Access-Control-Allow-Credentials", "true");
-        // 如果存在自定义的header参数，需要在此处添加，逗号分隔
-        resp.addHeader("Access-Control-Allow-Headers", "authorization,Origin, No-Cache, X-Requested-With, "
-                + "If-Modified-Since, Pragma, Last-Modified, Cache-Control, Expires, " + "Content-Type, X-E4M-With");
-        resp.addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-
+        LOGGER.info("请求：{}",rep.getRequestURI());
         filterChain.doFilter(servletRequest, servletResponse);
     }
 

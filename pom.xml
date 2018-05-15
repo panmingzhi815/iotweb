@@ -18,6 +18,13 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 
+	<repositories>
+		<repository>
+			<id>lib</id>
+			<url>file://${project.basedir}/lib</url>
+		</repository>
+	</repositories>
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -69,8 +76,6 @@
 			<groupId>com.huawei.iotplatform</groupId>
 			<artifactId>api-client</artifactId>
 			<version>1.0.0</version>
-			<scope>system</scope>
-			<systemPath>${basedir}/lib/api-client-1.0.0.jar</systemPath>
 		</dependency>
 
 		<dependency>
@@ -119,6 +124,12 @@
 			<groupId>com.alibaba</groupId>
 			<artifactId>fastjson</artifactId>
 			<version>1.2.31</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>20.0</version>
 		</dependency>
 	</dependencies>
 
