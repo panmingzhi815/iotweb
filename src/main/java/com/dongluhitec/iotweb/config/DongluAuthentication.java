@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
 public class DongluAuthentication extends Authentication {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DongluAuthentication.class);
-    public static final Cache<String,String> accessToken =  CacheBuilder.newBuilder().expireAfterWrite(3,TimeUnit.HOURS).build();
+    public static final Cache<String,String> accessToken =  CacheBuilder.newBuilder().expireAfterWrite(1,TimeUnit.HOURS).build();
 
     @Bean
     public DongluAuthentication authentication(@Autowired DongluClientInfo dongluClientInfo){

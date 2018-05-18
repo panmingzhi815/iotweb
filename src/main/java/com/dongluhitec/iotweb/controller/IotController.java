@@ -3,12 +3,14 @@ package com.dongluhitec.iotweb.controller;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.serializer.SerializerFeature;
-import com.dongluhitec.iotweb.iot.PasswordAndCardCmd;
+import com.dongluhitec.iotweb.iot.AddCardCmd;
 import com.dongluhitec.iotweb.bean.CommandReq;
 import com.dongluhitec.iotweb.bean.CommandRes;
 import com.dongluhitec.iotweb.bean.LoginUser;
 import com.dongluhitec.iotweb.config.Caches;
 import com.dongluhitec.iotweb.config.DongluAuthentication;
+import com.dongluhitec.iotweb.iot.AddPasswordCmd;
+import com.dongluhitec.iotweb.iot.DelCmd;
 import com.dongluhitec.iotweb.repository.CommandReqRepository;
 import com.dongluhitec.iotweb.repository.CommandResRepository;
 import com.dongluhitec.iotweb.repository.LoginUserRepository;
@@ -194,7 +196,6 @@ public class IotController {
                 commandRes.setData(dataJSONString);
                 commandResRepository.save(commandRes);
                 Caches.updateCache(jsonObject);
-                checkCommandTask(jsonObject.getString("deviceId"));
             });
         }catch (Exception io){
             LOGGER.error("处理设备数据变化订阅回传异常",io);
@@ -223,24 +224,27 @@ public class IotController {
         List<CommandReq> byDeviceId = commandReqRepository.findByDeviceIdOrderByCreateTimeAsc(deviceId);
         try {
             for (CommandReq commandReq : byDeviceId) {
-                Thread.sleep(1000L);
-                PostDeviceCommandInDTO postDeviceCommandInDTO = new PostDeviceCommandInDTO();
-                postDeviceCommandInDTO.setDeviceId(deviceId);
-                AsynCommandDTO command = new AsynCommandDTO();
-                postDeviceCommandInDTO.setCommand(command);
-                command.setMethod(commandReq.getMethod());
-                command.setServiceId(commandReq.getServiceId());
-                ObjectNode jsonNodes = JsonUtil.convertObject2ObjectNode(commandReq.getContent());
-                command.setParas(jsonNodes);
-                LOGGER.info("应用平台主动下载命令{}到设备{}",postDeviceCommandInDTO,deviceId);
-                SignalDelivery signalDelivery = new SignalDelivery(authentication.getNorthApiClient());
-                PostDeviceCommandOutDTO postDeviceCommandOutDTO = signalDelivery.postDeviceCommand(postDeviceCommandInDTO, authentication.getAppId(), authentication.getAccessTokenString());
-                LOGGER.info("应用平台己下载命令{}到设备{}",postDeviceCommandOutDTO,deviceId);
+                downloadCmd(deviceId, commandReq);
                 commandReqRepository.delete(commandReq);
             }
         } catch (Exception e) {
             LOGGER.error("应用平台主动下载命令到设备{}异常！",deviceId,e);
         }
+    }
+
+    private void downloadCmd(String deviceId, CommandReq commandReq) throws Exception {
+        PostDeviceCommandInDTO postDeviceCommandInDTO = new PostDeviceCommandInDTO();
+        postDeviceCommandInDTO.setDeviceId(deviceId);
+        AsynCommandDTO command = new AsynCommandDTO();
+        postDeviceCommandInDTO.setCommand(command);
+        command.setMethod(commandReq.getMethod());
+        command.setServiceId(commandReq.getServiceId());
+        ObjectNode jsonNodes = JsonUtil.convertObject2ObjectNode(commandReq.getContent());
+        command.setParas(jsonNodes);
+        LOGGER.info("应用平台主动下载命令{}到设备{}",postDeviceCommandInDTO,deviceId);
+        SignalDelivery signalDelivery = new SignalDelivery(authentication.getNorthApiClient());
+        PostDeviceCommandOutDTO postDeviceCommandOutDTO = signalDelivery.postDeviceCommand(postDeviceCommandInDTO, authentication.getAppId(), authentication.getAccessTokenString());
+        LOGGER.info("应用平台己下载命令{}到设备{}",postDeviceCommandOutDTO,deviceId);
     }
 
     @GetMapping("/subscribeCommandRspNotify")
@@ -254,65 +258,66 @@ public class IotController {
     }
 
     @PostMapping("/password")
-    public ResponseBody addPassword(@RequestParam String password,@RequestParam String deviceId,@RequestParam String passwordId,@RequestParam(required = false) String cardId) {
+    public ResponseBody addPassword(@RequestParam(required = false) String password,@RequestParam String deviceId,@RequestParam Integer id,@RequestParam(required = false) String cardId) throws Exception {
         assert password.length() == 6;
-        if (Strings.isNullOrEmpty(cardId)) {
-            return downloadPassword(password, deviceId, passwordId);
-        }else{
-            return downloadPasswordAndCard(password,deviceId,passwordId,cardId);
+        if (!Strings.isNullOrEmpty(password)) {
+            downloadPassword(password,deviceId,id);
         }
+        if (!Strings.isNullOrEmpty(cardId)) {
+            downloadCard(deviceId, id, cardId);
+        }
+        return ResponseBody.success("success");
+    }
+
+
+    @DeleteMapping("/password")
+    public ResponseBody delPassword(@RequestParam Integer id, @RequestParam String deviceId,@RequestParam Integer type) throws Exception {
+        CommandReq commandReq = new CommandReq();
+        commandReq.setDeviceId(deviceId);
+        commandReq.setMethod("DelScCtl");
+        commandReq.setServiceId("DelSC");
+        DelCmd delCmd = new DelCmd(id,type);
+        commandReq.setContent(delCmd.get().toString());
+        downloadCmd(deviceId,commandReq);
+        return ResponseBody.success("success");
     }
 
     /**
      * 同时下载卡片与密码
-     * @param password
      * @param deviceId
-     * @param passwordId
+     * @param id
      * @param cardId
      * @return
      */
-    private ResponseBody downloadPasswordAndCard(String password, String deviceId, String passwordId, String cardId) {
+    private ResponseBody downloadCard(String deviceId, Integer id, String cardId) throws Exception {
         cardId = cardId.replace('\u202D',' ').replace('\u202C',' ').trim();
         cardId = Strings.padStart(cardId,10,'0');
         CommandReq commandReq = new CommandReq();
         commandReq.setDeviceId(deviceId);
-        commandReq.setMethod("SetIDSC");
-        commandReq.setServiceId("SetInitIDSC");
-        PasswordAndCardCmd passwordAndCardCmd = new PasswordAndCardCmd(password, cardId, passwordId);
-        commandReq.setContent(passwordAndCardCmd.get().toString());
-        commandReqRepository.save(commandReq);
-        LOGGER.info("缓存添加密码指令{}到设备{}",commandReq,deviceId);
-        return ResponseBody.success("id",commandReq.getId());
+        commandReq.setMethod("AddCard");
+        commandReq.setServiceId("AddCard");
+        AddCardCmd addCardCmd = new AddCardCmd(cardId,id);
+        commandReq.setContent(addCardCmd.get().toString());
+        downloadCmd(deviceId,commandReq);
+        return ResponseBody.success("success");
     }
 
     /**
      * 单独下载密码
      * @param password
      * @param deviceId
-     * @param passwordId
+     * @param id
      * @return
      */
-    private ResponseBody downloadPassword(@RequestParam String password, @RequestParam String deviceId, @RequestParam String passwordId) {
-        char[] chars = password.toCharArray();
+    private ResponseBody downloadPassword(@RequestParam String password, @RequestParam String deviceId, @RequestParam Integer id) throws Exception {
         CommandReq commandReq = new CommandReq();
         commandReq.setDeviceId(deviceId);
         commandReq.setMethod("AddCtl");
         commandReq.setServiceId("AddSC");
-        commandReq.setContent("{\"CMD\": 8,\"ID\": "+passwordId+",\"SEQ\": "+passwordId+",\"LRC\": 0,\"LEN\": 6,\"STX\": 2,\"passwd0\": "+chars[0]+",\"passwd1\": "+chars[1]+",\"passwd2\": "+chars[2]+",\"passwd3\": "+chars[3]+",\"passwd4\": "+chars[4]+",\"passwd5\": "+chars[5]+"  }");
-        commandReqRepository.save(commandReq);
-        LOGGER.info("缓存添加密码指令{}到设备{}",commandReq,deviceId);
-        return ResponseBody.success("id",commandReq.getId());
+        AddPasswordCmd passwordCmd = new AddPasswordCmd(password, id);
+        commandReq.setContent(passwordCmd.get().toString());
+        downloadCmd(deviceId,commandReq);
+        return ResponseBody.success("success");
     }
 
-    @DeleteMapping("/password")
-    public ResponseBody delPassword(@RequestParam Integer passwordId, @RequestParam String deviceId) {
-        CommandReq commandReq = new CommandReq();
-        commandReq.setDeviceId(deviceId);
-        commandReq.setMethod("DelScCtl");
-        commandReq.setServiceId("DelSC");
-        commandReq.setContent("{\"CMD\": 10,\"ID\": "+passwordId+",\"SEQ\": "+passwordId+",\"LRC\": 0,\"LEN\": 1,    \"STX\": 2}");
-        commandReqRepository.save(commandReq);
-        LOGGER.info("缓存删除指令{}到设备{}",commandReq,deviceId);
-        return ResponseBody.success("id",commandReq.getId());
-    }
 }
