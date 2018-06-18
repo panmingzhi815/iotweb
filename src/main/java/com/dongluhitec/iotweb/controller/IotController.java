@@ -11,6 +11,7 @@ import com.dongluhitec.iotweb.config.Caches;
 import com.dongluhitec.iotweb.config.DongluAuthentication;
 import com.dongluhitec.iotweb.iot.AddPasswordCmd;
 import com.dongluhitec.iotweb.iot.DelCmd;
+import com.dongluhitec.iotweb.iot.OpenCloseDoor;
 import com.dongluhitec.iotweb.repository.CommandReqRepository;
 import com.dongluhitec.iotweb.repository.CommandResRepository;
 import com.dongluhitec.iotweb.repository.LoginUserRepository;
@@ -63,13 +64,13 @@ public class IotController {
     @PostMapping("/loginUser")
     public ResponseBody createLoginUser(@RequestBody LoginUser loginUser) {
         LoginUser save = loginUserRepository.save(loginUser);
-        return ResponseBody.success("id", save.getId());
+        return ResponseBody.success("type", save.getId());
     }
 
     @DeleteMapping("/loginUser/{id}")
     public ResponseBody removeLoginUser(@PathVariable("id") Long id) {
         loginUserRepository.deleteById(id);
-        return ResponseBody.success("id",id);
+        return ResponseBody.success("type",id);
     }
 
     @PutMapping("/loginUser")
@@ -77,7 +78,7 @@ public class IotController {
         boolean existsById = loginUserRepository.existsById(loginUser.getId());
         if (existsById) {
             loginUserRepository.save(loginUser);
-            return ResponseBody.success("id",loginUser.getId());
+            return ResponseBody.success("type",loginUser.getId());
         }
         return ResponseBody.fail(100002,"id不存在");
     }
@@ -155,6 +156,30 @@ public class IotController {
         return ResponseBody.success("status",Boolean.TRUE);
     }
 
+    @GetMapping("/device/open")
+    public ResponseBody open(@RequestParam String deviceId) throws Exception {
+        CommandReq commandReq = new CommandReq();
+        commandReq.setDeviceId(deviceId);
+        commandReq.setMethod("LockCtl");
+        commandReq.setServiceId("RomteCtl");
+        OpenCloseDoor openCloseDoor = new OpenCloseDoor(2);
+        commandReq.setContent(openCloseDoor.get().toString());
+        downloadCmd(deviceId,commandReq);
+        return ResponseBody.success("success");
+    }
+
+    @GetMapping("/device/close")
+    public ResponseBody close(@RequestParam String deviceId) throws Exception {
+        CommandReq commandReq = new CommandReq();
+        commandReq.setDeviceId(deviceId);
+        commandReq.setMethod("LockCtl");
+        commandReq.setServiceId("RomteCtl");
+        OpenCloseDoor openCloseDoor = new OpenCloseDoor(0);
+        commandReq.setContent(openCloseDoor.get().toString());
+        downloadCmd(deviceId,commandReq);
+        return ResponseBody.success("success");
+    }
+
     @DeleteMapping("/device/{deviceId}/log")
     public ResponseBody deleteDeviceLog(@PathVariable("deviceId") String deviceId) {
         List<CommandRes> byDeviceId = commandResRepository.findByDeviceId(deviceId);
@@ -218,18 +243,6 @@ public class IotController {
     public ResponseBody deleteAllCommand() {
         commandReqRepository.deleteAll();
         return ResponseBody.success("success");
-    }
-
-    private void checkCommandTask(String deviceId){
-        List<CommandReq> byDeviceId = commandReqRepository.findByDeviceIdOrderByCreateTimeAsc(deviceId);
-        try {
-            for (CommandReq commandReq : byDeviceId) {
-                downloadCmd(deviceId, commandReq);
-                commandReqRepository.delete(commandReq);
-            }
-        } catch (Exception e) {
-            LOGGER.error("应用平台主动下载命令到设备{}异常！",deviceId,e);
-        }
     }
 
     private void downloadCmd(String deviceId, CommandReq commandReq) throws Exception {

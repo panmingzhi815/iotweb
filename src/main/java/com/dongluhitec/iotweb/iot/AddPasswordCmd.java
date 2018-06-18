@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.Data;
 
-import javax.swing.table.TableStringConverter;
 
 @Data
 public class AddPasswordCmd {
