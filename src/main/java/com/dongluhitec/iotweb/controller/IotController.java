@@ -3,6 +3,7 @@ package com.dongluhitec.iotweb.controller;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.serializer.SerializerFeature;
+import com.dongluhitec.iotweb.bean.Device;
 import com.dongluhitec.iotweb.iot.AddCardCmd;
 import com.dongluhitec.iotweb.bean.CommandReq;
 import com.dongluhitec.iotweb.bean.CommandRes;
@@ -24,6 +25,7 @@ import com.huawei.iotplatform.client.invokeapi.DeviceManagement;
 import com.huawei.iotplatform.client.invokeapi.SignalDelivery;
 import com.huawei.iotplatform.utils.JsonUtil;
 import org.apache.commons.io.IOUtils;
+import org.mapstruct.Mapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +47,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.stream.Collectors;
 
 @EnableSwagger2
 @RestController
@@ -98,27 +101,69 @@ public class IotController {
         return httpSession.getAttribute("sessionId") != null;
     }
 
+    /**
+     * 获取北向平台设备列表
+     * @param page
+     * @param limit
+     * @param gatewayId
+     * @param status
+     * @return
+     * @throws NorthApiException
+     */
+//    @GetMapping("/device")
+//    public QueryDevicesOutDTO getDeviceList(@RequestParam Integer page,@RequestParam Integer limit,@RequestParam(required = false) String gatewayId,@RequestParam(required = false) String status) throws NorthApiException {
+//        QueryDevicesInDTO queryDevicesInDTO = new QueryDevicesInDTO();
+//        queryDevicesInDTO.setPageNo(page);
+//        queryDevicesInDTO.setPageSize(limit);
+//        queryDevicesInDTO.setGatewayId(Strings.emptyToNull(gatewayId));
+//        queryDevicesInDTO.setStatus(Strings.emptyToNull(status));
+//        DataCollection dataCollection = new DataCollection(authentication.getNorthApiClient());
+//        QueryDevicesOutDTO queryDevicesOutDTO = dataCollection.queryDevices(queryDevicesInDTO, authentication.getNorthApiClient().getClientInfo().getAppId(), authentication.getAccessTokenString());
+//        queryDevicesOutDTO.getDevices().stream().forEach(e->{
+//            try {
+//                e.getDeviceInfo().setBatteryLevel(Caches.battery.get(e.getDeviceId(), () -> ""));
+//                e.getDeviceInfo().setSignalStrength(Caches.signal.get(e.getDeviceId(), () -> ""));
+//                e.getDeviceInfo().setStatusDetail(Caches.open.get(e.getDeviceId(), () -> ""));
+//            } catch (ExecutionException e1) {
+//                e1.printStackTrace();
+//            }
+//        });
+//        return queryDevicesOutDTO;
+//    }
+
     @GetMapping("/device")
-    public QueryDevicesOutDTO getDeviceList(@RequestParam Integer pageNo,@RequestParam Integer pageSize,@RequestParam(required = false) String gatewayId,@RequestParam(required = false) String status) throws NorthApiException {
+    public LayuiResponse getDeviceList(@RequestParam Integer page,@RequestParam Integer limit,@RequestParam(required = false) String gatewayId,@RequestParam(required = false) String status) throws NorthApiException {
         QueryDevicesInDTO queryDevicesInDTO = new QueryDevicesInDTO();
-        queryDevicesInDTO.setPageNo(pageNo);
-        queryDevicesInDTO.setPageSize(pageSize);
+        queryDevicesInDTO.setPageNo(page - 1);
+        queryDevicesInDTO.setPageSize(limit);
         queryDevicesInDTO.setGatewayId(Strings.emptyToNull(gatewayId));
         queryDevicesInDTO.setStatus(Strings.emptyToNull(status));
         DataCollection dataCollection = new DataCollection(authentication.getNorthApiClient());
         QueryDevicesOutDTO queryDevicesOutDTO = dataCollection.queryDevices(queryDevicesInDTO, authentication.getNorthApiClient().getClientInfo().getAppId(), authentication.getAccessTokenString());
-        queryDevicesOutDTO.getDevices().stream().forEach(e->{
+        List<Device> deviceList = queryDevicesOutDTO.getDevices().stream().map(m -> {
+            Device device = new Device();
             try {
-                e.getDeviceInfo().setBatteryLevel(Caches.battery.get(e.getDeviceId(), () -> ""));
-                e.getDeviceInfo().setSignalStrength(Caches.signal.get(e.getDeviceId(), () -> ""));
-                e.getDeviceInfo().setStatusDetail(Caches.open.get(e.getDeviceId(), () -> ""));
-            } catch (ExecutionException e1) {
-                e1.printStackTrace();
+                device.setNodeId(m.getDeviceInfo().getNodeId());
+                device.setStatus(m.getDeviceInfo().getStatus());
+                device.setDeviceType(m.getDeviceInfo().getDeviceType());
+                device.setName(m.getDeviceInfo().getName());
+                device.setBatteryLevel(Caches.battery.get(m.getDeviceId(), () -> ""));
+                device.setSignalStrength(Caches.signal.get(m.getDeviceId(), () -> ""));
+                device.setStatusDetail(Caches.open.get(m.getDeviceId(), () -> ""));
+            } catch (ExecutionException e) {
+                e.printStackTrace();
             }
-        });
-        return queryDevicesOutDTO;
-    }
+            return device;
+        }).collect(Collectors.toList());
 
+        return new LayuiResponse(0,"success",queryDevicesOutDTO.getTotalCount(),deviceList);
+    }
+    /**
+     * 注册北向平台设备
+     * @param modifyDeviceInfoInDTO
+     * @return
+     * @throws NorthApiException
+     */
     @PostMapping("/device")
     public RegDirectDeviceOutDTO regDirectDevice(@RequestBody ModifyDeviceInfoInDTO modifyDeviceInfoInDTO) throws NorthApiException {
         String deviceId = modifyDeviceInfoInDTO.getDeviceId();
@@ -149,6 +194,12 @@ public class IotController {
         return regDirectDeviceOutDTO;
     }
 
+    /**
+     * 删除北向平台设备
+     * @param deviceId
+     * @return
+     * @throws NorthApiException
+     */
     @DeleteMapping("/device")
     public ResponseBody deleteDirectDevice(@RequestParam String deviceId) throws NorthApiException {
         DeviceManagement deviceManagement = new DeviceManagement(authentication.getNorthApiClient());
@@ -156,6 +207,12 @@ public class IotController {
         return ResponseBody.success("status",Boolean.TRUE);
     }
 
+    /**
+     * 发送北向平台开锁命令
+     * @param deviceId
+     * @return
+     * @throws Exception
+     */
     @GetMapping("/device/open")
     public ResponseBody open(@RequestParam String deviceId) throws Exception {
         CommandReq commandReq = new CommandReq();
@@ -168,6 +225,12 @@ public class IotController {
         return ResponseBody.success("success");
     }
 
+    /**
+     * 发送北向平台关锁命令
+     * @param deviceId
+     * @return
+     * @throws Exception
+     */
     @GetMapping("/device/close")
     public ResponseBody close(@RequestParam String deviceId) throws Exception {
         CommandReq commandReq = new CommandReq();
@@ -180,6 +243,11 @@ public class IotController {
         return ResponseBody.success("success");
     }
 
+    /**
+     * 清空设备日志列表
+     * @param deviceId
+     * @return
+     */
     @DeleteMapping("/device/{deviceId}/log")
     public ResponseBody deleteDeviceLog(@PathVariable("deviceId") String deviceId) {
         List<CommandRes> byDeviceId = commandResRepository.findByDeviceId(deviceId);
@@ -189,6 +257,11 @@ public class IotController {
         return ResponseBody.success("status",Boolean.TRUE);
     }
 
+    /**
+     * 获取设备日志列表
+     * @param queryDataHistoryInDTO
+     * @return
+     */
     @PostMapping("/device/log")
     public Page<CommandRes> getDeviceLog(@RequestBody QueryDataHistoryInDTO queryDataHistoryInDTO) {
         Page<CommandRes> commandResPage = commandResRepository.findAll((Specification<CommandRes>) (root, criteriaQuery, criteriaBuilder) -> {
@@ -204,6 +277,11 @@ public class IotController {
         return commandResPage;
     }
 
+    /**
+     * 接收北向平台设备日志
+     * @param request
+     * @return
+     */
     @PostMapping("/receiveLog")
     public ResponseBody receiveCommandRspNotify(HttpServletRequest request) {
         try (ServletInputStream inputStream = request.getInputStream()){
@@ -228,6 +306,11 @@ public class IotController {
         return ResponseBody.success("receive log is success:" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
     }
 
+    /**
+     * 订阅北向平台响应命令
+     * @param request
+     * @return
+     */
     @PostMapping("/receiveCommand")
     public ResponseBody receiveCommand(HttpServletRequest request) {
         try (ServletInputStream inputStream = request.getInputStream()){
@@ -239,6 +322,10 @@ public class IotController {
         return ResponseBody.success("receive content is success:" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
     }
 
+    /**
+     * 删除所有响应命令日志
+     * @return
+     */
     @DeleteMapping("/command")
     public ResponseBody deleteAllCommand() {
         commandReqRepository.deleteAll();

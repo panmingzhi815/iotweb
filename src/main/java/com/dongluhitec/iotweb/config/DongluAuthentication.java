@@ -40,7 +40,6 @@ public class DongluAuthentication extends Authentication {
         try {
             return DongluAuthentication.accessToken.get("accessToken", () -> {
                 String token = getAuthToken().getAccessToken();
-                accessToken.put("accessToken",token);
                 LOGGER.info("刷新token:{}",token);
                 return token;
             });
