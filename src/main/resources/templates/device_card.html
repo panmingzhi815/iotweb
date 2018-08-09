@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>卡片管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" th:href="@{/lib/layui/css/layui.css}">
+    <link rel="stylesheet" th:href="@{/css/scroll-bar.css}">
+    <link rel="stylesheet" th:href="@{/css/sub-page.css}">
+    <link rel="stylesheet" href="//at.alicdn.com/t/font_693759_wytlyqhtdtj1nhfr.css">
+</head>
+<body>
+<div class="ok-body">
+    <form class="layui-form layui-form-pane ok-form">
+        <input id="deviceId" hidden th:value="${deviceId}">
+
+        <div class="layui-form-item">
+            <label class="layui-form-label">类型</label>
+            <div class="layui-input-block">
+                <input type="radio" name="type" value="add" title="添加" checked>
+                <input type="radio" name="type" value="delete" title="删除">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <label class="layui-form-label">卡号</label>
+            <div class="layui-input-block">
+                <input type="text" id="card" placeholder="请输入卡号" autocomplete="off" class="layui-input"
+                       lay-verify="required">
+            </div>
+        </div>
+        <div class="layui-form-item">
+            <div class="layui-input-block">
+                <button class="layui-btn" lay-submit lay-filter="edit">立即提交</button>
+                <button type="reset" class="layui-btn layui-btn-primary">重置</button>
+            </div>
+        </div>
+    </form>
+</div>
+<!--js逻辑-->
+<script src="lib/layui/layui.js"></script>
+<script>
+    layui.use(['element', 'form', 'jquery', 'laydate'], function () {
+        var form = layui.form;
+        var $ = layui.jquery;
+
+        form.on('submit(edit)', function (data) {
+            var type = $("input[name='type']:checked").val();
+            var deviceId = $("#deviceId").val();
+            var card = $("#card").val();
+            if (type === 'add') {
+                $.ajax({
+                    type: "POST",
+                    url: "/card?deviceId=" + deviceId + "&card=" + card,
+                    dataType: "json",
+                    timeout: 3000,
+                    success: function (result) {
+                        console.log(JSON.stringify(result));
+                        layer.msg("操作成功！", {icon: 1, time: 1000});
+                        parent.layer.close(parent.layer.getFrameIndex(window.name));
+                    },
+                    error: function () {
+                        layer.msg("操作异常！", {icon: 2, time: 1000});
+                    }
+                });
+            }
+            if (type === 'delete') {
+                $.ajax({
+                    type: "DELETE",
+                    url: "/card?deviceId=" + deviceId + "&card=" + card,
+                    dataType: "json",
+                    timeout: 3000,
+                    success: function (result) {
+                        console.log(JSON.stringify(result));
+                        layer.msg("操作成功！", {icon: 1, time: 1000});
+                        parent.layer.close(parent.layer.getFrameIndex(window.name));
+                    },
+                    error: function () {
+                        layer.msg("操作异常！", {icon: 2, time: 1000});
+                    }
+                });
+            }
+            return false;
+        });
+    })
+</script>
+</body>
+</html>

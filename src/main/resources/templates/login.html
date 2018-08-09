@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>东云IOT管理平台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="shortcut icon" th:href="@{images/favicon.ico}" type="image/x-icon"/>
+    <link rel="stylesheet" th:href="@{lib/layui/css/layui.css}">
+    <link rel="stylesheet" href="//at.alicdn.com/t/font_693759_ask70l8wanw.css">
+    <link rel="stylesheet" href="https://cdn.bootcss.com/animate.css/3.5.2/animate.min.css"/>
+    <link rel="stylesheet" th:href="@{css/login.css}"/>
+    <link rel="stylesheet" th:href="@{lib/nprogress/nprogress.css}">
+</head>
+<body>
+<div class="login-box animated rotateIn">
+    <div class="head"></div>
+    <div class="input-box">
+        <form class="layui-form" action="">
+            <input type="text" name="username" required lay-verify="required" placeholder="平台账号" autocomplete="off" class="layui-input">
+            <input type="password" name="password" required lay-verify="required" placeholder="密码" autocomplete="off" class="layui-input">
+            <div class="remember-me">
+                <span>记住我：</span>
+                <input type="checkbox" name="zzz" lay-skin="switch" lay-text="是|否">
+            </div>
+            <input type="submit" value="登 录" lay-submit lay-filter="login">
+        </form>
+    </div>
+    <div class="copyright">
+        © 2018-2019 pmz-admin. All rights reserved.
+    </div>
+</div>
+<!--js逻辑-->
+<script th:src="@{/lib/layui/layui.js}"></script>
+<script th:src="@{/lib/nprogress/nprogress.js}"></script>
+<script>
+    NProgress.start();
+    window.onload = function() {
+        NProgress.done();
+    }
+    layui.use(['form', 'jquery'], function () {
+        var form = layui.form;
+        var $ = layui.$;
+        var layer = layui.layer;
+        form.on('submit(login)', function (data) {
+            var username = $("input[name=username]").val();
+            var password = $("input[name=password]").val();
+
+            $.ajax({
+                type : "POST",
+                url : "/session",
+                data : JSON.stringify({username:username,password:password}),
+                contentType : "application/json",
+                dataType : "json",
+                success:function(result) {
+                    console.log("/session: " + JSON.stringify(result));
+                    if (result["errorCode"] === 0){
+                        window.location = "index.html";
+                    }else{
+                        layer.msg("用户名或密码错误");
+                    }
+                }
+            });
+            return false;
+        });
+    });
+</script>
+</body>
+</html>

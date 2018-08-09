@@ -3,15 +3,14 @@ package com.dongluhitec.iotweb.controller;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.serializer.SerializerFeature;
-import com.dongluhitec.iotweb.bean.Device;
-import com.dongluhitec.iotweb.iot.AddCardCmd;
 import com.dongluhitec.iotweb.bean.CommandReq;
 import com.dongluhitec.iotweb.bean.CommandRes;
+import com.dongluhitec.iotweb.bean.Device;
 import com.dongluhitec.iotweb.bean.LoginUser;
 import com.dongluhitec.iotweb.config.Caches;
 import com.dongluhitec.iotweb.config.DongluAuthentication;
-import com.dongluhitec.iotweb.iot.AddPasswordCmd;
-import com.dongluhitec.iotweb.iot.DelCmd;
+import com.dongluhitec.iotweb.iot.AddPrivilege;
+import com.dongluhitec.iotweb.iot.DelPrivilege;
 import com.dongluhitec.iotweb.iot.OpenCloseDoor;
 import com.dongluhitec.iotweb.repository.CommandReqRepository;
 import com.dongluhitec.iotweb.repository.CommandResRepository;
@@ -25,7 +24,15 @@ import com.huawei.iotplatform.client.invokeapi.DeviceManagement;
 import com.huawei.iotplatform.client.invokeapi.SignalDelivery;
 import com.huawei.iotplatform.utils.JsonUtil;
 import org.apache.commons.io.IOUtils;
-import org.mapstruct.Mapping;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.execchain.MinimalClientExec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +47,9 @@ import javax.persistence.criteria.Predicate;
 import javax.servlet.ServletInputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -65,19 +75,19 @@ public class IotController {
     private LoginUserRepository loginUserRepository;
 
     @PostMapping("/loginUser")
-    public ResponseBody createLoginUser(@RequestBody LoginUser loginUser) {
+    public JSONObject createLoginUser(@RequestBody LoginUser loginUser) {
         LoginUser save = loginUserRepository.save(loginUser);
         return ResponseBody.success("type", save.getId());
     }
 
     @DeleteMapping("/loginUser/{id}")
-    public ResponseBody removeLoginUser(@PathVariable("id") Long id) {
+    public JSONObject removeLoginUser(@PathVariable("id") Long id) {
         loginUserRepository.deleteById(id);
         return ResponseBody.success("type",id);
     }
 
     @PutMapping("/loginUser")
-    public ResponseBody editLoginUser(@RequestBody LoginUser loginUser) {
+    public JSONObject editLoginUser(@RequestBody LoginUser loginUser) {
         boolean existsById = loginUserRepository.existsById(loginUser.getId());
         if (existsById) {
             loginUserRepository.save(loginUser);
@@ -87,7 +97,7 @@ public class IotController {
     }
 
     @PostMapping("/session")
-    public ResponseBody login(@RequestBody LoginUser loginUser,HttpSession httpSession){
+    public JSONObject login(@RequestBody LoginUser loginUser,HttpSession httpSession){
         if ("admin".equals(loginUser.getUsername()) && "123456".equals(loginUser.getPassword())){
             httpSession.setAttribute("sessionId",httpSession.getId());
             return ResponseBody.success("sessionId",httpSession.getId());
@@ -101,48 +111,19 @@ public class IotController {
         return httpSession.getAttribute("sessionId") != null;
     }
 
-    /**
-     * 获取北向平台设备列表
-     * @param page
-     * @param limit
-     * @param gatewayId
-     * @param status
-     * @return
-     * @throws NorthApiException
-     */
-//    @GetMapping("/device")
-//    public QueryDevicesOutDTO getDeviceList(@RequestParam Integer page,@RequestParam Integer limit,@RequestParam(required = false) String gatewayId,@RequestParam(required = false) String status) throws NorthApiException {
-//        QueryDevicesInDTO queryDevicesInDTO = new QueryDevicesInDTO();
-//        queryDevicesInDTO.setPageNo(page);
-//        queryDevicesInDTO.setPageSize(limit);
-//        queryDevicesInDTO.setGatewayId(Strings.emptyToNull(gatewayId));
-//        queryDevicesInDTO.setStatus(Strings.emptyToNull(status));
-//        DataCollection dataCollection = new DataCollection(authentication.getNorthApiClient());
-//        QueryDevicesOutDTO queryDevicesOutDTO = dataCollection.queryDevices(queryDevicesInDTO, authentication.getNorthApiClient().getClientInfo().getAppId(), authentication.getAccessTokenString());
-//        queryDevicesOutDTO.getDevices().stream().forEach(e->{
-//            try {
-//                e.getDeviceInfo().setBatteryLevel(Caches.battery.get(e.getDeviceId(), () -> ""));
-//                e.getDeviceInfo().setSignalStrength(Caches.signal.get(e.getDeviceId(), () -> ""));
-//                e.getDeviceInfo().setStatusDetail(Caches.open.get(e.getDeviceId(), () -> ""));
-//            } catch (ExecutionException e1) {
-//                e1.printStackTrace();
-//            }
-//        });
-//        return queryDevicesOutDTO;
-//    }
-
     @GetMapping("/device")
-    public LayuiResponse getDeviceList(@RequestParam Integer page,@RequestParam Integer limit,@RequestParam(required = false) String gatewayId,@RequestParam(required = false) String status) throws NorthApiException {
-        QueryDevicesInDTO queryDevicesInDTO = new QueryDevicesInDTO();
-        queryDevicesInDTO.setPageNo(page - 1);
-        queryDevicesInDTO.setPageSize(limit);
-        queryDevicesInDTO.setGatewayId(Strings.emptyToNull(gatewayId));
-        queryDevicesInDTO.setStatus(Strings.emptyToNull(status));
+    public JSONObject getDeviceList(@RequestParam Integer page,@RequestParam Integer limit,@RequestParam(required = false) String deviceId,@RequestParam(required = false) String status) throws NorthApiException {
+        QueryDevicesInDTO in = new QueryDevicesInDTO();
+        in.setPageNo(page - 1);
+        in.setPageSize(limit);
+        in.setGatewayId(Strings.emptyToNull(deviceId));
+        in.setStatus(Strings.emptyToNull(status));
         DataCollection dataCollection = new DataCollection(authentication.getNorthApiClient());
-        QueryDevicesOutDTO queryDevicesOutDTO = dataCollection.queryDevices(queryDevicesInDTO, authentication.getNorthApiClient().getClientInfo().getAppId(), authentication.getAccessTokenString());
-        List<Device> deviceList = queryDevicesOutDTO.getDevices().stream().map(m -> {
+        QueryDevicesOutDTO out = dataCollection.queryDevices(in, authentication.getNorthApiClient().getClientInfo().getAppId(), authentication.getAccessTokenString());
+        List<Device> deviceList = out.getDevices().stream().map(m -> {
             Device device = new Device();
             try {
+                device.setDeviceId(m.getDeviceId());
                 device.setNodeId(m.getDeviceInfo().getNodeId());
                 device.setStatus(m.getDeviceInfo().getStatus());
                 device.setDeviceType(m.getDeviceInfo().getDeviceType());
@@ -155,17 +136,16 @@ public class IotController {
             }
             return device;
         }).collect(Collectors.toList());
-
-        return new LayuiResponse(0,"success",queryDevicesOutDTO.getTotalCount(),deviceList);
+        return ResponseBody.successPageList(out.getTotalCount(),deviceList);
     }
     /**
      * 注册北向平台设备
-     * @param modifyDeviceInfoInDTO
-     * @return
-     * @throws NorthApiException
+     * @param modifyDeviceInfoInDTO 修改信息
+     * @return json
+     * @throws NorthApiException exception
      */
     @PostMapping("/device")
-    public RegDirectDeviceOutDTO regDirectDevice(@RequestBody ModifyDeviceInfoInDTO modifyDeviceInfoInDTO) throws NorthApiException {
+    public JSONObject regDirectDevice(@RequestBody ModifyDeviceInfoInDTO modifyDeviceInfoInDTO) throws NorthApiException, IOException {
         String deviceId = modifyDeviceInfoInDTO.getDeviceId();
 
         RegDirectDeviceInDTO deviceInDTO = new RegDirectDeviceInDTO();
@@ -191,35 +171,40 @@ public class IotController {
         LOGGER.info("设备修改：{}",modifyDeviceInfoInDTO);
 
         deviceManagement.modifyDeviceInfo(modifyDeviceInfoInDTO, authentication.getAppId(), authentication.getAccessTokenString());
-        return regDirectDeviceOutDTO;
+
+        return ResponseBody.success("success");
     }
 
     /**
      * 删除北向平台设备
-     * @param deviceId
-     * @return
-     * @throws NorthApiException
+     * @param deviceIds 设备id
+     * @return json
+     * @throws NorthApiException exception
      */
     @DeleteMapping("/device")
-    public ResponseBody deleteDirectDevice(@RequestParam String deviceId) throws NorthApiException {
-        DeviceManagement deviceManagement = new DeviceManagement(authentication.getNorthApiClient());
-        deviceManagement.deleteDirectDevice(deviceId,authentication.getNorthApiClient().getClientInfo().getAppId(),authentication.getAccessTokenString());
+    public JSONObject deleteDirectDevice(@RequestParam String deviceIds) throws NorthApiException {
+        assert deviceIds.length() > 0;
+        String[] split = deviceIds.split(",");
+        for (String deviceId : split) {
+            DeviceManagement deviceManagement = new DeviceManagement(authentication.getNorthApiClient());
+            deviceManagement.deleteDirectDevice(deviceId,authentication.getNorthApiClient().getClientInfo().getAppId(),authentication.getAccessTokenString());
+        }
         return ResponseBody.success("status",Boolean.TRUE);
     }
 
     /**
      * 发送北向平台开锁命令
-     * @param deviceId
-     * @return
-     * @throws Exception
+     * @param deviceId 设备id
+     * @return json
+     * @throws Exception exception
      */
     @GetMapping("/device/open")
-    public ResponseBody open(@RequestParam String deviceId) throws Exception {
+    public JSONObject open(@RequestParam String deviceId) throws Exception {
         CommandReq commandReq = new CommandReq();
         commandReq.setDeviceId(deviceId);
-        commandReq.setMethod("LockCtl");
-        commandReq.setServiceId("RomteCtl");
-        OpenCloseDoor openCloseDoor = new OpenCloseDoor(2);
+        commandReq.setMethod("RemoteCTL");
+        commandReq.setServiceId("RemoteCTL");
+        OpenCloseDoor openCloseDoor = new OpenCloseDoor(1);
         commandReq.setContent(openCloseDoor.get().toString());
         downloadCmd(deviceId,commandReq);
         return ResponseBody.success("success");
@@ -227,16 +212,16 @@ public class IotController {
 
     /**
      * 发送北向平台关锁命令
-     * @param deviceId
-     * @return
-     * @throws Exception
+     * @param deviceId 设备id
+     * @return json
+     * @throws Exception exception
      */
     @GetMapping("/device/close")
-    public ResponseBody close(@RequestParam String deviceId) throws Exception {
+    public JSONObject close(@RequestParam String deviceId) throws Exception {
         CommandReq commandReq = new CommandReq();
         commandReq.setDeviceId(deviceId);
-        commandReq.setMethod("LockCtl");
-        commandReq.setServiceId("RomteCtl");
+        commandReq.setMethod("RemoteCTL");
+        commandReq.setServiceId("RemoteCTL");
         OpenCloseDoor openCloseDoor = new OpenCloseDoor(0);
         commandReq.setContent(openCloseDoor.get().toString());
         downloadCmd(deviceId,commandReq);
@@ -245,11 +230,11 @@ public class IotController {
 
     /**
      * 清空设备日志列表
-     * @param deviceId
-     * @return
+     * @param deviceId 设备id
+     * @return json
      */
     @DeleteMapping("/device/{deviceId}/log")
-    public ResponseBody deleteDeviceLog(@PathVariable("deviceId") String deviceId) {
+    public JSONObject deleteDeviceLog(@PathVariable("deviceId") String deviceId) {
         List<CommandRes> byDeviceId = commandResRepository.findByDeviceId(deviceId);
         assert byDeviceId != null;
         commandResRepository.deleteAll(byDeviceId);
@@ -259,31 +244,27 @@ public class IotController {
 
     /**
      * 获取设备日志列表
-     * @param queryDataHistoryInDTO
-     * @return
+     * @return json
      */
-    @PostMapping("/device/log")
-    public Page<CommandRes> getDeviceLog(@RequestBody QueryDataHistoryInDTO queryDataHistoryInDTO) {
-        Page<CommandRes> commandResPage = commandResRepository.findAll((Specification<CommandRes>) (root, criteriaQuery, criteriaBuilder) -> {
+    @GetMapping("/device/log")
+    public JSONObject getDeviceLog(@RequestParam Integer page,@RequestParam Integer limit,@RequestParam(required = false) String deviceId) {
+        Page<CommandRes> all = commandResRepository.findAll((Specification<CommandRes>) (root, criteriaQuery, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
-            if (!Strings.isNullOrEmpty(queryDataHistoryInDTO.getDeviceId())) {
-                predicates.add(criteriaBuilder.like(root.get("deviceId"), queryDataHistoryInDTO.getDeviceId()));
-            }
-            if (!Strings.isNullOrEmpty(queryDataHistoryInDTO.getGatewayId())) {
-                predicates.add(criteriaBuilder.like(root.get("gatewayId"), queryDataHistoryInDTO.getGatewayId()));
+            if (!Strings.isNullOrEmpty(deviceId)) {
+                predicates.add(criteriaBuilder.like(root.get("deviceId"), deviceId));
             }
             return criteriaBuilder.and(predicates.toArray(new Predicate[predicates.size()]));
-        }, PageRequest.of(queryDataHistoryInDTO.getPageNo(), queryDataHistoryInDTO.getPageSize(), Sort.by(Sort.Direction.DESC, "createTime")));
-        return commandResPage;
+        }, PageRequest.of(page-1, limit, Sort.by(Sort.Direction.DESC, "createTime")));
+        return ResponseBody.successPageList(all.getTotalElements(),all.getContent());
     }
 
     /**
      * 接收北向平台设备日志
-     * @param request
-     * @return
+     * @param request request
+     * @return json
      */
     @PostMapping("/receiveLog")
-    public ResponseBody receiveCommandRspNotify(HttpServletRequest request) {
+    public JSONObject receiveCommandRspNotify(HttpServletRequest request) {
         try (ServletInputStream inputStream = request.getInputStream()){
             final String log = IOUtils.toString(inputStream, "utf-8");
             LOGGER.info("接收到设备数据变化:{}",log);
@@ -308,11 +289,11 @@ public class IotController {
 
     /**
      * 订阅北向平台响应命令
-     * @param request
-     * @return
+     * @param request request
+     * @return json
      */
     @PostMapping("/receiveCommand")
-    public ResponseBody receiveCommand(HttpServletRequest request) {
+    public JSONObject receiveCommand(HttpServletRequest request) {
         try (ServletInputStream inputStream = request.getInputStream()){
             final String log = IOUtils.toString(inputStream, "utf-8");
             LOGGER.info("接收到设备响应命令变化:{}",log);
@@ -324,16 +305,17 @@ public class IotController {
 
     /**
      * 删除所有响应命令日志
-     * @return
+     * @return json
      */
     @DeleteMapping("/command")
-    public ResponseBody deleteAllCommand() {
+    public JSONObject deleteAllCommand() {
         commandReqRepository.deleteAll();
         return ResponseBody.success("success");
     }
 
     private void downloadCmd(String deviceId, CommandReq commandReq) throws Exception {
         PostDeviceCommandInDTO postDeviceCommandInDTO = new PostDeviceCommandInDTO();
+        postDeviceCommandInDTO.setExpireTime(10 * 60);
         postDeviceCommandInDTO.setDeviceId(deviceId);
         AsynCommandDTO command = new AsynCommandDTO();
         postDeviceCommandInDTO.setCommand(command);
@@ -357,65 +339,27 @@ public class IotController {
         return "register receive log success:" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
-    @PostMapping("/password")
-    public ResponseBody addPassword(@RequestParam(required = false) String password,@RequestParam String deviceId,@RequestParam Integer id,@RequestParam(required = false) String cardId) throws Exception {
-        assert password.length() == 6;
-        if (!Strings.isNullOrEmpty(password)) {
-            downloadPassword(password,deviceId,id);
-        }
-        if (!Strings.isNullOrEmpty(cardId)) {
-            downloadCard(deviceId, id, cardId);
-        }
+    @PostMapping("/card")
+    public JSONObject addCard(@RequestParam(required = false) String deviceId, @RequestParam(required = false) String card) throws Exception {
+        CommandReq commandReq = new CommandReq();
+        commandReq.setDeviceId(deviceId);
+        commandReq.setMethod("DownPwr");
+        commandReq.setServiceId("DownPwr");
+        AddPrivilege addPrivilege = new AddPrivilege(null, card, null, null);
+        commandReq.setContent(addPrivilege.get().toString());
+        downloadCmd(deviceId,commandReq);
+
         return ResponseBody.success("success");
     }
 
-
-    @DeleteMapping("/password")
-    public ResponseBody delPassword(@RequestParam Integer id, @RequestParam String deviceId,@RequestParam Integer type) throws Exception {
+    @DeleteMapping("/card")
+    public JSONObject delelteCard(@RequestParam(required = false) String deviceId, @RequestParam(required = false) String card) throws Exception {
         CommandReq commandReq = new CommandReq();
         commandReq.setDeviceId(deviceId);
-        commandReq.setMethod("DelScCtl");
-        commandReq.setServiceId("DelSC");
-        DelCmd delCmd = new DelCmd(id,type);
+        commandReq.setMethod("DelOnePwr");
+        commandReq.setServiceId("DleOnePwr");
+        DelPrivilege delCmd = new DelPrivilege(card);
         commandReq.setContent(delCmd.get().toString());
-        downloadCmd(deviceId,commandReq);
-        return ResponseBody.success("success");
-    }
-
-    /**
-     * 同时下载卡片与密码
-     * @param deviceId
-     * @param id
-     * @param cardId
-     * @return
-     */
-    private ResponseBody downloadCard(String deviceId, Integer id, String cardId) throws Exception {
-        cardId = cardId.replace('\u202D',' ').replace('\u202C',' ').trim();
-        cardId = Strings.padStart(cardId,10,'0');
-        CommandReq commandReq = new CommandReq();
-        commandReq.setDeviceId(deviceId);
-        commandReq.setMethod("AddCard");
-        commandReq.setServiceId("AddCard");
-        AddCardCmd addCardCmd = new AddCardCmd(cardId,id);
-        commandReq.setContent(addCardCmd.get().toString());
-        downloadCmd(deviceId,commandReq);
-        return ResponseBody.success("success");
-    }
-
-    /**
-     * 单独下载密码
-     * @param password
-     * @param deviceId
-     * @param id
-     * @return
-     */
-    private ResponseBody downloadPassword(@RequestParam String password, @RequestParam String deviceId, @RequestParam Integer id) throws Exception {
-        CommandReq commandReq = new CommandReq();
-        commandReq.setDeviceId(deviceId);
-        commandReq.setMethod("AddCtl");
-        commandReq.setServiceId("AddSC");
-        AddPasswordCmd passwordCmd = new AddPasswordCmd(password, id);
-        commandReq.setContent(passwordCmd.get().toString());
         downloadCmd(deviceId,commandReq);
         return ResponseBody.success("success");
     }

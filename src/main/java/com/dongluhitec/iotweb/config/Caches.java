@@ -1,6 +1,7 @@
 package com.dongluhitec.iotweb.config;
 
 import com.alibaba.fastjson.JSONObject;
+import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -21,22 +22,16 @@ public class Caches {
 
     public static void updateCache(JSONObject jsonObject){
         String deviceId = jsonObject.getString("deviceId");
-        if (deviceId != null) {
-            Optional.ofNullable(jsonObject.getJSONObject("service"))
-                    .filter(f->"UpStatus".equals(f.getString("serviceId")))
-                    .map(m->m.getJSONObject("data"))
-                    .ifPresent(p->{
-                        battery.put(deviceId,Optional.ofNullable(p.getInteger("BATERRY")).map(String::valueOf).orElse(""));
-                        signal.put(deviceId,Optional.ofNullable(p.getInteger("SIGNAL")).map(String::valueOf).orElse(""));
-                        open.put(deviceId,Optional.ofNullable(p.getInteger("OPEN")).map(m->m.equals(0)?"关":"开").map(String::valueOf).orElse(""));
-            });
+        JSONObject service = jsonObject.getJSONObject("service");
 
-            Optional.ofNullable(jsonObject.getJSONObject("service"))
-                    .filter(f->"OpenCloseEvent".equals(f.getString("serviceId")))
-                    .map(m->m.getJSONObject("data"))
-                    .ifPresent(p->{
-                        open.put(deviceId,Optional.ofNullable(p.getInteger("OPEN")).map(m->m==0?"关":"开").map(String::valueOf).orElse(""));
-                    });
+        if (deviceId != null && service != null ) {
+            String serviceType = service.getString("serviceType");
+            JSONObject data = service.getJSONObject("data");
+            if("UpStates".equals(serviceType) && data != null){
+                battery.put(deviceId,Optional.ofNullable(data.getInteger("BATTERY")).map(String::valueOf).orElse(""));
+                signal.put(deviceId,Optional.ofNullable(data.getInteger("SIGNAL")).map(String::valueOf).orElse(""));
+                open.put(deviceId,Optional.ofNullable(data.getInteger("LOCKSTATE")).map(m->m.equals(0)?"关":"开").map(String::valueOf).orElse(""));
+            }
         }
     }
 

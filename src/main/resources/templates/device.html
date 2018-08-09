@@ -2,45 +2,212 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>设备管理</title>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <link th:href="@{/layui/css/layui.css}" rel="stylesheet"/>
-    <script th:src="@{/layui/layui.all.js}"></script>
-    <script></script>
+    <title>用户列表</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" th:href="@{/lib/layui/css/layui.css}">
+    <link rel="stylesheet" th:href="@{/css/scroll-bar.css}">
+    <link rel="stylesheet" th:href="@{/css/sub-page.css}">
+    <link rel="stylesheet" href="//at.alicdn.com/t/font_693759_wytlyqhtdtj1nhfr.css">
+    <link rel="stylesheet" th:href="@{/lib/nprogress/nprogress.css}">
 </head>
 <body>
-<div style="margin: 10px 10px 10px 10px;">
-    <table id="demo" lay-filter="test"></table>
-    <script type="text/html" id="barDemo">
-        <a class="layui-btn layui-btn-xs" lay-event="detail">远程开门</a>
-        <a class="layui-btn layui-btn-xs" lay-event="detail">远程关门</a>
-        <a class="layui-btn layui-btn-xs" lay-event="detail">密码管理</a>
-        <a class="layui-btn layui-btn-xs" lay-event="detail">卡片管理</a>
-    </script>
-</div>
-</body>
-<script th:inline="javascript">
-    layui.use('table', function(){
-        var table = layui.table;
+<div class="ok-body">
+    <!--面包屑导航区域-->
+    <div class="ok-body-breadcrumb">
+            <span class="layui-breadcrumb">
+                <a><cite>系统管理</cite></a>
+                <a><cite>设备列表</cite></a>
+            </span>
+        <a class="layui-btn layui-btn-small" href="javascript:location.replace(location.href);" title="刷新">
+            <i class="layui-icon layui-icon-refresh"></i>
+        </a>
+    </div>
+    <!--工具栏-->
+    <okToolbar>
+        <button class="layui-btn" id="addUser">
+            <i class="layui-icon">&#xe61f;</i>设备注册
+        </button>
+        <button class="layui-btn layui-btn-danger" id="batchDel">
+            <i class="layui-icon layui-icon-delete"></i>删除设备
+        </button>
+    </okToolbar>
 
-        //第一个实例
-        table.render({
-            elem: '#demo'
-            ,url: '/device' //数据接口
-            ,page: true //开启分页
-            ,cols: [[ //表头
-                {field: 'nodeId', title: '标识', width:160, sort: true, fixed: 'left'}
-                ,{field: 'name', title: '名称', width:160}
-                ,{field: 'deviceType', title: '类型', width:160, sort: true}
-                ,{field: 'batteryLevel', title: '电量', width:100}
-                ,{field: 'signalStrength', title: '信号', width: 100}
-                ,{field: 'statusDetail', title: '开关', width: 100, sort: true}
-                ,{field: 'status', title: '在线', width: 100, sort: true}
-                ,{fixed: 'right', title:'操作', align:'left', toolbar: '#barDemo'}
-            ]]
+    <!--数据表格-->
+    <table class="layui-hide" id="tableId" lay-filter="tableFilter"></table>
+</div>
+<!--js逻辑-->
+<script th:src="@{/lib/layui/layui.js}"></script>
+<script th:src="@{/lib/nprogress/nprogress.js}"></script>
+<script>
+    NProgress.start();
+    window.onload = function () {
+        NProgress.done();
+    };
+
+    layui.use(['element', 'table', 'form', 'jquery', 'laydate'], function () {
+        var element = layui.element;
+        var table = layui.table;
+        var form = layui.form;
+        var $ = layui.jquery;
+
+        $("#addUser").click(function () {
+            layer.open({
+                title: '设备注册',
+                type: 2,
+                shade: false,
+                maxmin: true,
+                shade: 0.5,
+                anim: 4,
+                area: ['50%', '50%'],
+                content: 'device_add.html',
+                zIndex: layer.zIndex,
+                skin: 'layui-layer-molv',
+                end: function () {
+                    $(".layui-laypage-btn")[0].click();
+                }
+            });
         });
 
-    });
+        $("#batchDel").click(function () {
+            var checkStatus = table.checkStatus('tableId');
+            var rows = checkStatus.data.length;
+            if(rows <= 0){
+                layer.msg("请先勾选中要删除的设备！", {icon: 2, time: 1000});
+                return;
+            }
+
+            layer.confirm("你确定要删除勾选中的设备吗？", {skin: 'layui-layer-molv', icon: 3, title: '提示', anim: 6}, function () {
+                var deviceIds = checkStatus.data[0].deviceId;
+                for (var i = 1; i < checkStatus.data.length; i++) {
+                    deviceIds = "," + checkStatus.data[i].deviceId;
+                }
+                $.ajax({
+                    type : "DELETE",
+                    url : "/device?deviceIds="+deviceIds,
+                    dataType : "json",
+                    timeout:3000,
+                    success:function(result) {
+                        console.log(JSON.stringify(result));
+                        layer.msg("操作成功！", {icon: 1, time: 1000});
+                        $(".layui-laypage-btn")[0].click();
+                    },
+                    error:function () {
+                        layer.msg("操作异常！", {icon: 2, time: 1000});
+                    }
+                });
+            });
+        });
+
+        table.render({
+            elem: '#tableId',
+            url: '/device',
+            limit: 10,
+            page: true,
+            cols: [
+                [
+                    {type: 'checkbox'}
+                    ,{field: "nodeId", title: "设备编号", width: 200, sort: true}
+                    , {field: "name", title: "名称", width: 150}
+                    , {field: "deviceType", title: "类型", width: 150, sort: true}
+                    , {field: "batteryLevel", title: "电量", width: 150}
+                    , {field: "signalStrength", title: "信号", width: 150}
+                    , {field: "statusDetail", title: "开关", width: 150, sort: true}
+                    , {field: "status", title: "在线",templet: '#onlineTp', width: 150, sort: true}
+                    ,{fixed: 'right', title:"操作", width: 350, align:'left', toolbar: '#operationTpl'}
+                ]
+            ],
+            response: {
+                statusName: 'errorCode' //数据状态的字段名称，默认：code
+                ,msgName: 'errorMsg' //状态信息的字段名称，默认：msg
+                ,countName: 'total' //数据总数的字段名称，默认：count
+                ,dataName: 'rows' //数据列表的字段名称，默认：data
+            }
+        });
+
+        form.on('submit(search)', function () {
+            layer.msg('正在查询，请稍后...');
+            return false;
+        });
+
+        table.on('tool(tableFilter)', function (obj) {
+            var data = obj.data;
+            var layEvent = obj.event;
+            if (layEvent === 'cardManage') {
+                layer.open({
+                    title: '卡片管理',
+                    type: 2,
+                    maxmin: true,
+                    shade: 0.5,
+                    anim: 4,
+                    area: ['50%', '50%'],
+                    content: 'device_card.html?deviceId='+data.deviceId+"&nodeId=" + data.nodeId,
+                    skin: 'layui-layer-molv',
+                    zIndex: layer.zIndex,
+                    end: function () {
+                        $(".layui-laypage-btn")[0].click();
+                    }
+                });
+            } else if (layEvent === 'remoteOpenDoor') {
+                layer.confirm("确定要执行远程开门吗？", {skin: 'layui-layer-molv', icon: 3, title: '提示', anim: 6}, function () {
+                    $.ajax({
+                        type : "GET",
+                        url : "/device/open?deviceId=" + data.deviceId,
+                        dataType : "json",
+                        timeout:3000,
+                        success:function(result) {
+                            console.log(JSON.stringify(result));
+                            layer.msg("操作成功！", {icon: 1, time: 1000});
+                        },
+                        error:function (result) {
+                            console.log(JSON.stringify(result));
+                            layer.msg("操作异常！", {icon: 2, time: 1000});
+                        }
+                    });
+                });
+            } else if (layEvent === 'remoteCloseDoor') {
+                layer.confirm("确定要执行远程关门吗？", {skin: 'layui-layer-molv', icon: 3, title: '提示', anim: 6}, function () {
+                    $.ajax({
+                        type : "GET",
+                        url : "/device/close?deviceId=" + data.deviceId,
+                        dataType : "json",
+                        timeout:3000,
+                        success:function(result) {
+                            console.log(JSON.stringify(result));
+                            layer.msg("操作成功！", {icon: 1, time: 1000});
+                        },
+                        error:function (result) {
+                            console.log(JSON.stringify(result));
+                            layer.msg("操作异常！", {icon: 2, time: 1000});
+                        }
+                    });
+                });
+            } else if (layEvent === 'log') {
+                layer.open({
+                    title: '历史数据',
+                    type: 2,
+                    shade: false,
+                    maxmin: true,
+                    shade: 0.5,
+                    anim: 4,
+                    area: ['90%', '90%'],
+                    content: 'log.html?deviceId='+data.deviceId,
+                    zIndex: layer.zIndex,
+                    skin: 'layui-layer-molv'
+                });
+            }
+        });
+    })
 </script>
+<!--模板-->
+<script type="text/html" id="onlineTp">
+    <input type="checkbox" name="status" disabled lay-skin="switch" lay-text="在线|离线" {{ d.status=='ONLINE' ? 'checked' : ''}}>
+</script>
+
+<script type="text/html" id="operationTpl">
+    <a class="layui-btn layui-btn-xs" lay-event="remoteOpenDoor">远程开门</a>
+    <a class="layui-btn layui-btn-xs" lay-event="remoteCloseDoor">远程关门</a>
+    <a class="layui-btn layui-btn-xs" lay-event="cardManage">卡片管理</a>
+    <a class="layui-btn layui-btn-xs" lay-event="log">历史数据</a>
+</script>
+</body>
 </html>
