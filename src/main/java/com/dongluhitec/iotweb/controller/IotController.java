@@ -12,6 +12,7 @@ import com.dongluhitec.iotweb.config.DongluAuthentication;
 import com.dongluhitec.iotweb.iot.AddPrivilege;
 import com.dongluhitec.iotweb.iot.DelPrivilege;
 import com.dongluhitec.iotweb.iot.OpenCloseDoor;
+import com.dongluhitec.iotweb.iot.SetDateTime;
 import com.dongluhitec.iotweb.repository.CommandReqRepository;
 import com.dongluhitec.iotweb.repository.CommandResRepository;
 import com.dongluhitec.iotweb.repository.LoginUserRepository;
@@ -51,9 +52,11 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -229,6 +232,26 @@ public class IotController {
     }
 
     /**
+     * 更新北向平台设备时间
+     * @param deviceId 设备id
+     * @return json
+     * @throws Exception exception
+     */
+    @GetMapping("/device/time")
+    public JSONObject time(@RequestParam String deviceId) throws Exception {
+        CommandReq commandReq = new CommandReq();
+        commandReq.setDeviceId(deviceId);
+        commandReq.setMethod("UpSAck");
+        commandReq.setServiceId("UpSAck");
+        SetDateTime setDateTime = new SetDateTime();
+        commandReq.setContent(setDateTime.get().toString());
+        downloadCmd(deviceId,commandReq);
+        LOGGER.info("设置设备时间成功：{}",deviceId);
+        return ResponseBody.success("success");
+    }
+
+
+    /**
      * 清空设备日志列表
      * @param deviceId 设备id
      * @return json
@@ -263,7 +286,7 @@ public class IotController {
      * @param request request
      * @return json
      */
-    @PostMapping("/receiveLog")
+    @RequestMapping("/receiveLog")
     public JSONObject receiveCommandRspNotify(HttpServletRequest request) {
         try (ServletInputStream inputStream = request.getInputStream()){
             final String log = IOUtils.toString(inputStream, "utf-8");
@@ -280,11 +303,26 @@ public class IotController {
                 commandRes.setData(dataJSONString);
                 commandResRepository.save(commandRes);
                 Caches.updateCache(jsonObject);
+
+                asynCheckDeviceTime(commandRes);
             });
         }catch (Exception io){
             LOGGER.error("处理设备数据变化订阅回传异常",io);
         }
         return ResponseBody.success("receive log is success:" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+    }
+
+    private void asynCheckDeviceTime(CommandRes commandRes) {
+        try {
+            String deviceId = commandRes.getDeviceId();
+            Integer deviceCurrentTime = Caches.time.get(deviceId, () -> 0);
+            Long computerCurrentTime = LocalDateTime.now().toInstant(ZoneOffset.of("+8")).toEpochMilli() / 1000;
+            if (Math.abs(computerCurrentTime - deviceCurrentTime) > 10 * 60){
+                time(deviceId);
+            }
+        } catch (Exception e) {
+            LOGGER.error("设置设备时间失败",e);
+        }
     }
 
     /**
